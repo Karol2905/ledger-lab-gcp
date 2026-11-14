@@ -151,7 +151,7 @@ resource "google_storage_bucket" "state" {
   project                     = google_project.this["ops"].project_id
   location                    = var.region
   storage_class               = "STANDARD"
-  uniform_bucket_level_access = true       # Solo IAM: sin ACL por objeto.
+  uniform_bucket_level_access = false      # Solo IAM: sin ACL por objeto.
   public_access_prevention    = "enforced" # El estado contiene secretos.
   force_destroy               = true
   labels                      = local.labels
