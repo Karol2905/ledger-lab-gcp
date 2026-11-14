@@ -216,6 +216,15 @@ resource "google_artifact_registry_repository_iam_member" "run_agents" {
   depends_on = [time_sleep.apis]
 }
 
+# Al crear el servicio, Cloud Run tambien comprueba que quien despliega pueda leer la imagen.
+resource "google_artifact_registry_repository_iam_member" "pipeline_reader" {
+  project    = google_project.this["ops"].project_id
+  location   = google_artifact_registry_repository.ghcr.location
+  repository = google_artifact_registry_repository.ghcr.name
+  role       = "roles/artifactregistry.reader"
+  member     = google_service_account.github.member
+}
+
 # ---------------------------------------------------------------------------------------------
 # Identidad de GitHub Actions: Workload Identity Federation, sin claves que guardar
 # ---------------------------------------------------------------------------------------------
