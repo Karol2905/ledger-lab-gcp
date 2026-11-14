@@ -125,3 +125,18 @@ def test_public_health_route_reports_environment(client):
     body = client.get("/api/health").json()
     assert body["status"] == "ok"
     assert "environment" in body
+
+
+def test_transfer_over_limit_is_rejected_without_trace(client, signup, database_url):
+    """Reto: limite por transferencia. El rechazo no mueve saldo ni escribe asientos."""
+    from ledger.services import MAX_TRANSFER_CENTS
+
+    ana, luis = signup("ana@example.com"), signup("luis@example.com")
+    response = send(client, ana, "luis@example.com", MAX_TRANSFER_CENTS + 1, "clave-limite")
+    assert response.status_code == 422
+    assert balance(client, ana) == WELCOME_BONUS_CENTS
+    assert balance(client, luis) == WELCOME_BONUS_CENTS
+    with create_engine(database_url).connect() as connection:
+        assert connection.scalar(select(func.count()).select_from(LedgerEntry)) == 0
+    # Por debajo del limite vuelven a aplicar las demas reglas (aqui, el saldo).
+    assert send(client, ana, "luis@example.com", MAX_TRANSFER_CENTS, "clave-justo").status_code == 409

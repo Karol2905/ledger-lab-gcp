@@ -8,6 +8,8 @@ from ledger.models import Account, LedgerEntry, Transfer, User
 from ledger.security import hash_password, verify_password
 
 WELCOME_BONUS_CENTS = 100_000
+# Regla de negocio (reto de la Parte 12): ningun pago individual puede superar 10.000,00.
+MAX_TRANSFER_CENTS = 1_000_000
 
 
 class EmailAlreadyRegistered(Exception):
@@ -24,6 +26,10 @@ class InsufficientFunds(Exception):
 
 class SameAccount(Exception):
     pass
+
+
+class TransferLimitExceeded(Exception):
+    """El monto supera el limite por transferencia."""
 
 
 class IdempotencyConflict(Exception):
@@ -75,6 +81,9 @@ def transfer(
     session: Session, source_user_id: str, target_email: str, amount_cents: int, key: str
 ) -> Transfer:
     """Mueve dinero de forma atomica e idempotente."""
+    # Se valida antes de tocar la base: un pago rechazado por la regla no deja rastro.
+    if amount_cents > MAX_TRANSFER_CENTS:
+        raise TransferLimitExceeded
     source = get_account(session, source_user_id)
     target_user = session.scalar(select(User).where(User.email == target_email.lower()))
     if target_user is None:
