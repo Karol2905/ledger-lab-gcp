@@ -135,6 +135,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Cuenta no encontrada") from error
         except services.InsufficientFunds as error:
             raise HTTPException(status.HTTP_409_CONFLICT, "Saldo insuficiente") from error
+        except services.TransferLimitExceeded as error:
+            raise HTTPException(422, "Supera el limite por transferencia") from error
         except services.SameAccount as error:
             raise HTTPException(422, "Misma cuenta") from error
         except services.IdempotencyConflict as error:
