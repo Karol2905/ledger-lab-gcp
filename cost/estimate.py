@@ -23,7 +23,7 @@ HERE = Path(__file__).parent
 # Servicios del catalogo de facturacion de Google.
 CLOUD_RUN = "152E-C115-5142"
 CLOUD_SQL = "9662-B51E-5089"
-SECRET_MANAGER = "EE2C-7FAC-5E08"
+SECRET_MANAGER = "EE82-7A5E-871C"
 CLOUD_LOGGING = "5490-F7B7-8DF6"
 CLOUD_STORAGE = "95FF-2EF5-5EA1"
 
@@ -41,7 +41,7 @@ METERS = {
     ),
     "sql_backup_gib_month": (CLOUD_SQL, r"^Cloud SQL: Backups in ", "GiBy.mo", 1),
     "secret_version_month": (SECRET_MANAGER, r"^Secret version replica storage$", "mo", 1),
-    "secret_10k_access": (SECRET_MANAGER, r"^Access operations$", "count", 10_000),
+    "secret_10k_access": (SECRET_MANAGER, r"^Secret access operations$", "count", 10_000),
     "log_gib": (CLOUD_LOGGING, r"^Log Storage cost$", "GiBy", 1),
     "gcs_gib_month": (CLOUD_STORAGE, r"^Standard Storage ", "GiBy.mo", 1),
     "gcs_10k_writes": (CLOUD_STORAGE, r"^Regional Standard Class A Operations$", "count", 10_000),
