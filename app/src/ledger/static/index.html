@@ -428,7 +428,7 @@ $("logout").addEventListener("click", () => {
   say("");
 });
 
-fetch("/healthz").then((response) => response.json()).then((health) => {
+fetch("/api/health").then((response) => response.json()).then((health) => {
   $("env").textContent = `Ambiente: ${health.environment}`;
   $("env").hidden = false;
 }).catch(() => {});

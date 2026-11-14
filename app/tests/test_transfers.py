@@ -118,3 +118,10 @@ def test_concurrent_retries_of_same_key_charge_once(client, signup):
 def test_health_endpoints(client):
     assert client.get("/healthz").json()["status"] == "ok"
     assert client.get("/readyz").json()["status"] == "ready"
+
+
+def test_public_health_route_reports_environment(client):
+    """Cloud Run bloquea /healthz desde fuera; la interfaz lee el ambiente de /api/health."""
+    body = client.get("/api/health").json()
+    assert body["status"] == "ok"
+    assert "environment" in body
