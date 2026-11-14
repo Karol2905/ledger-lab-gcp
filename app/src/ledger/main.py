@@ -66,8 +66,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return FileResponse(STATIC_DIR / "index.html")
 
     @app.get("/healthz")
+    @app.get("/api/health")
     def healthz() -> dict:
-        """Liveness: no toca la base, asi una sonda no la mantiene ocupada ni consume conexiones."""
+        """Liveness: no toca la base, asi una sonda no la mantiene ocupada ni consume conexiones.
+
+        Cloud Run reserva algunas rutas que terminan en "z" (como /healthz) en su borde publico:
+        sus sondas internas si la alcanzan, pero el navegador recibe un 404. Por eso la interfaz
+        usa /api/health.
+        """
         return {"status": "ok", "environment": app_settings.environment}
 
     @app.get("/readyz")
