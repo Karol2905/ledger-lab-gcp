@@ -15,6 +15,11 @@ terraform {
 provider "google" {
   project = var.project_id
   region  = var.region
+
+  # La cuenta del pipeline vive en el proyecto ops; sin esto Google cobraria la cuota de las APIs
+  # (Cloud SQL Admin, Secret Manager) a ops, donde no estan habilitadas.
+  user_project_override = true
+  billing_project       = var.project_id
 }
 
 variable "project_id" {
