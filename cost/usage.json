@@ -1,0 +1,19 @@
+{
+  "default_region": "us-central1",
+  "app_active_hours_per_month": { "dev": 10, "prod": 40 },
+  "requests_per_month": { "dev": 5000, "prod": 50000 },
+  "sql_hours_per_month": { "dev": 24, "prod": 72 },
+  "sql_backup_gib": 1,
+  "secret_accesses_per_version": 500,
+  "log_gib_per_month": 1,
+  "state_storage_gib": 1,
+  "state_writes_per_month": 500,
+  "free_tier": {
+    "vcpu_seconds": 180000,
+    "gib_seconds": 360000,
+    "requests": 2000000,
+    "secret_versions": 6,
+    "secret_accesses": 10000,
+    "log_gib": 50
+  }
+}

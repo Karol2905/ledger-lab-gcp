@@ -1,0 +1,99 @@
+# Workflow reutilizable: despliega un ambiente. deploy.yml lo llama una vez por ambiente,
+# de modo que dev y prod siguen exactamente los mismos pasos.
+name: deploy-env
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: Ambiente de GitHub y carpeta en infra/environments
+        type: string
+        required: true
+      image:
+        description: Imagen fijada por digest
+        type: string
+        required: true
+
+jobs:
+  deploy:
+    name: Desplegar ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    # Este nombre viaja en el token OIDC (claim environment) y activa las reglas de proteccion.
+    environment: ${{ inputs.environment }}
+    concurrency: terraform-${{ inputs.environment }}
+    defaults:
+      run:
+        # Activa pipefail: sin esto, "estimate.py | tee" ocultaria el fallo del control de costos.
+        shell: bash
+    env:
+      TF_IN_AUTOMATION: "true"
+      TF_VAR_project_id: ${{ vars.GCP_PROJECT }}
+      TF_VAR_region: ${{ vars.GCP_REGION }}
+      TF_VAR_image: ${{ inputs.image }}
+      ROOT: infra/environments/${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Validar configuración
+        env:
+          VALUES: >-
+            GCP_WIF_PROVIDER=${{ vars.GCP_WIF_PROVIDER }}
+            GCP_SERVICE_ACCOUNT=${{ vars.GCP_SERVICE_ACCOUNT }}
+            GCP_REGION=${{ vars.GCP_REGION }}
+            GCP_PROJECT=${{ vars.GCP_PROJECT }}
+            TF_STATE_BUCKET=${{ vars.TF_STATE_BUCKET }}
+            COST_BUDGET_USD=${{ vars.COST_BUDGET_USD }}
+        run: |
+          # Falla antes de tocar Google Cloud si una variable falta o quedo con un texto de ejemplo.
+          failed=0
+          for pair in $VALUES; do
+            value="${pair#*=}"
+            if [[ -z "$value" || "$value" == *"<"* || "$value" == *">"* ]]; then
+              echo "::error::Revise la variable ${pair%%=*}"
+              failed=1
+            fi
+          done
+          exit "$failed"
+      - name: Autenticar con OIDC
+        id: auth
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+          token_format: access_token # Tambien entrega un token para la API de precios.
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: 1.17.2
+          terraform_wrapper: false
+      - name: Terraform init
+        env:
+          STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+          STATE_PREFIX: ledger-${{ inputs.environment }}
+        run: |
+          terraform -chdir="$ROOT" init -input=false \
+            -backend-config="bucket=$STATE_BUCKET" \
+            -backend-config="prefix=$STATE_PREFIX"
+      - name: Terraform plan
+        run: terraform -chdir="$ROOT" plan -input=false -out=deploy.tfplan
+      - name: Control de costos
+        env:
+          BUDGET: ${{ vars.COST_BUDGET_USD }}
+          ENVIRONMENT: ${{ inputs.environment }}
+          GOOGLE_OAUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+        run: |
+          terraform -chdir="$ROOT" show -json deploy.tfplan > "$RUNNER_TEMP/plan.json"
+          python3 cost/estimate.py --plan "$ENVIRONMENT=$RUNNER_TEMP/plan.json" --budget "$BUDGET" | tee "$RUNNER_TEMP/cost.txt"
+          {
+            echo "### Costo estimado de $ENVIRONMENT"
+            echo '```'
+            cat "$RUNNER_TEMP/cost.txt"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Terraform apply
+        run: terraform -chdir="$ROOT" apply -input=false deploy.tfplan
+      - name: Prueba de humo
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+        run: |
+          URL="$(terraform -chdir="$ROOT" output -raw app_url)"
+          scripts/smoke.sh "$URL"
+          echo "### $ENVIRONMENT desplegado en $URL" >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,82 @@
+# Corre en cada Pull Request y en cada push a main. No usa credenciales de Google Cloud:
+# todo lo que valida se puede comprobar sin tocar la nube.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  TERRAFORM_VERSION: 1.17.2
+
+jobs:
+  app:
+    name: Pruebas de la aplicacion
+    runs-on: ubuntu-latest
+    # Un PostgreSQL real en un contenedor: las pruebas de concurrencia corren sobre el mismo motor
+    # que Cloud SQL, no solo sobre SQLite.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: ledger
+          POSTGRES_PASSWORD: solo-para-ci
+          POSTGRES_DB: ledger
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U ledger" --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+      - name: Ruff
+        run: uv run --project app --python 3.12 --extra dev ruff check app
+      - name: Pytest con SQLite
+        run: uv run --project app --python 3.12 --extra dev pytest app -q
+      - name: Pytest con PostgreSQL
+        env:
+          TEST_DATABASE_URL: postgresql+psycopg://ledger:solo-para-ci@localhost:5432/ledger
+        run: uv run --project app --python 3.12 --extra dev --extra postgres pytest app -q
+
+  terraform:
+    name: Terraform
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+      - name: Formato
+        run: terraform fmt -check -recursive infra
+      - name: Validar cada raiz
+        run: |
+          for root in infra/bootstrap infra/environments/dev infra/environments/prod; do
+            terraform -chdir="$root" init -backend=false -input=false
+            terraform -chdir="$root" validate
+          done
+      - name: Pruebas con proveedores simulados
+        run: |
+          for module in infra/modules/database infra/modules/stack; do
+            terraform -chdir="$module" init -backend=false -input=false
+            terraform -chdir="$module" test
+          done
+
+  seguridad-costos:
+    name: Seguridad y costos
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+      - name: Checkov
+        run: uvx --python 3.12 checkov --config-file .checkov.yaml
+      - name: Pruebas del estimador
+        run: uvx --python 3.12 --with pytest pytest cost/tests -q
+      - name: Presupuesto con planes de ejemplo
+        run: |
+          python3 cost/estimate.py --offline --budget 5 \
+            --plan dev=cost/fixtures/dev-plan.json \
+            --plan prod=cost/fixtures/prod-plan.json

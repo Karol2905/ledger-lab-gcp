@@ -1,0 +1,29 @@
+# Ejecucion local con el mismo motor que Cloud SQL: docker compose up --build
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: ledger
+      POSTGRES_PASSWORD: solo-para-uso-local
+      POSTGRES_DB: ledger
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "ledger"]
+      interval: 5s
+      retries: 10
+    volumes:
+      - ledger-data:/var/lib/postgresql/data
+
+  app:
+    build: ./app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    environment:
+      APP_ENV: local
+      DATABASE_URL: postgresql+psycopg://ledger:solo-para-uso-local@postgres:5432/ledger
+      JWT_SECRET: solo-para-uso-local-no-usar-en-la-nube-0123456789
+
+volumes:
+  ledger-data:

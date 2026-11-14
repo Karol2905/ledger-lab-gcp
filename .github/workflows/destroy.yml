@@ -1,0 +1,53 @@
+# Elimina un ambiente. Pide escribir su nombre para evitar accidentes.
+name: destroy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Ambiente a eliminar
+        required: true
+        type: choice
+        options: [dev, prod]
+      confirm:
+        description: Escriba de nuevo el nombre del ambiente
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  destroy:
+    name: Eliminar ${{ inputs.environment }}
+    if: ${{ inputs.environment == inputs.confirm }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    concurrency: terraform-${{ inputs.environment }}
+    env:
+      TF_VAR_project_id: ${{ vars.GCP_PROJECT }}
+      TF_VAR_region: ${{ vars.GCP_REGION }}
+      # Terraform exige un valor, pero eliminar no usa la imagen.
+      TF_VAR_image: ghcr.io/none/none@sha256:0000000000000000000000000000000000000000000000000000000000000000
+      ROOT: infra/environments/${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: 1.17.2
+          terraform_wrapper: false
+      - name: Terraform init
+        env:
+          STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+          STATE_PREFIX: ledger-${{ inputs.environment }}
+        run: |
+          terraform -chdir="$ROOT" init -input=false \
+            -backend-config="bucket=$STATE_BUCKET" \
+            -backend-config="prefix=$STATE_PREFIX"
+      - name: Terraform destroy
+        run: terraform -chdir="$ROOT" destroy -input=false -auto-approve
