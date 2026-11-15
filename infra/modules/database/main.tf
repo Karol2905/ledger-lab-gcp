@@ -116,4 +116,7 @@ resource "google_sql_user" "app" {
   project  = var.project_id
   instance = google_sql_database_instance.this.name
   password = random_password.app.result
+  # En PostgreSQL el usuario es dueno de las tablas y Cloud SQL se niega a borrarlo ("role cannot be
+  # dropped because some objects depend on it"). Al destruir se abandona: desaparece con la instancia.
+  deletion_policy = "ABANDON"
 }
